@@ -1,1 +1,133 @@
  
+
+import bluetooth
+import pandas as pd
+import webbrowser
+from tempfile import NamedTemporaryFile
+macaddresslist = []
+devicessnamelist= []
+mix =[]
+thermokrasies =[]
+hum = []
+mixThermo = []
+uvIndex=0.4
+listHours =["9:00-11:00", "11:00-13:00","1300-1500","15:00-17:00"]
+
+listMonday = ["","AI EPL604","","EPL660 Information Retrival"]
+listTuesday = ["Cloud epl699","","",""]
+listWed = ["","AI EPL604","","EPL660 Information Retrival"]
+listThursday = ["Cloud epl699","","","epl601"]
+listFriday = ["","Cloud epl699","epl603",""]
+listtogether = {'Monday': listMonday , 'Tuesday':listTuesday, 'Wednesday':listWed ,'Thursday': listThursday, 'Friday':listFriday }
+WeeklyClasses = pd.DataFrame(listtogether,index = listHours)
+print(WeeklyClasses)
+
+
+width = int(input("Please Give me the width dimensions of the room " ))
+heigh = int(input("Please give me the heigh dimensions of the room "))
+peopleAllowed = int((width *heigh)*0.5)
+file = open("results2.txt", "w")
+import Adafruit_DHT
+import time
+DHT_SENSOR = Adafruit_DHT.DHT22
+DHT_PIN = 4
+counter =0;
+while counter <=3: #we can change this time a time set! for our purpose we need to loop 3 times. 
+    humidity, temperature = Adafruit_DHT.read_retry(DHT_SENSOR, DHT_PIN)
+
+    if humidity is not None and temperature is not None: 
+        thermokrasies.append(int(temperature))
+        hum.append(int(humidity))
+        mixThermo.append(str(temperature) + " " + str(humidity)) 
+        print("Temp={0:0.1f}*C  Humidity={1:0.1f}%".format(temperature, humidity))
+        counter = counter +1
+	
+    else:
+        print("Failed to retrieve data from humidity sensor")
+    counter = counter +1    
+    time.sleep(2)
+datat= {'Thermokrasia':thermokrasies, 'Humidity':hum}
+df2 = pd.DataFrame(datat) 
+print(df2) 
+
+input("Please let the user turn on the Bluetooth >>> PLease press ENTER when you are ready")    
+print("Scanning for bluetooth devices: ")
+
+devices = bluetooth.discover_devices(lookup_names = True)
+
+number_of_devices = len(devices)
+
+
+print(number_of_devices, "devices found")
+
+for addr,name in devices:
+
+    print("\n")
+
+    print("Device Name: %s" % (name))
+    devicessnamelist.append(name)
+    print("Device MAC Address: %s" % (addr))
+    macaddresslist.append(addr)
+    print("\n")
+    mix.append(name+ " "+ addr)
+    file.write(str(addr)+ "," + str(name) +"\n")
+print('Please find the attached')
+data = macaddresslist
+def calculation(x,y):
+    return 32.43+(-0.62*x)+(-0.15*y)
+def calculations2(x,y):
+    return ( round((7.644+1.387*((x-20.54)/10.66)+0.022*(((y/100)-45.235)/28.665))+7.553*((uvIndex-50)/50)+1.397*((x-20.54)/10.66)*((uvIndex-50)/50),2))
+valueVirus_half = calculation(temperature , humidity)
+calculateKinfectivity = calculations2(temperature,humidity)
+print(calculateKinfectivity)
+print(valueVirus_half)
+valueVirus_half2 = int(valueVirus_half)
+df = pd.DataFrame(data, columns = [ 'MAC Address'], index = devicessnamelist) 
+print(df)
+file.write("Total Bluetooth devices is : " + str(number_of_devices) + "\n" + "People Allowed in the class is : "+ str(peopleAllowed) + "\n" + "Width "
+           + str(width) + "\n" + "Height " + str(heigh) + "\n" + "Details : "+ str(df2) + "\n" + "The kInfectivity is = "+ str(calculateKinfectivity)
+           + "\n" + "In case of virus be alive in 50 % is = " + str(valueVirus_half2) +" hours, room needs to be empty "  )
+file.close()
+    
+base_html = """
+<!doctype html>
+    <html><head>
+    <title>UOC </title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.2/jquery.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.css">
+    <script type="text/javascript" src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.js"></script>
+    </head><body><div style="text-align:center"><img src="/home/pi/Downloads/UOC.png" alt="UOC" width="100" height="100"><h1 style="text-align:center;"> Welcome to University of Cyprus Measurements </h1> </div><div> <h2 style="text-align:center;"> You have been provided with this information </h2><br> </br>%s<script type="text/javascript">$(document).ready(function(){$('table').DataTable({
+        "pageLength": 50
+    });});</script>
+    </body></html>
+    """
+
+def df_html(y,a,b):
+    """HTML table with pagination and other goodies"""
+   
+    if peopleAllowed<number_of_devices:
+        df_html = "<h1 style='text-align:center;'> ALERT! NEED TO GET OUT A PERSON! </h1><h2>" + "Width is "+ str(width) +" "+ "Height is  "+ str(heigh) + " You are allowed  "+ str(peopleAllowed) +"</h2></div>"
+        + y.to_html() + a.to_html() + b.to_html()
+    else:
+        df_html = "<h3 style='text-align:center;'>" + "     Width is   "+ str(width) + "  Height is  "+ str(heigh) + " You are allowed  "+ str(peopleAllowed)+"  people " +"</h3></div>"+"<br></br><p> From the measurement needs to be at least this time "+ str(valueVirus_half2)+"  hours in order to minimize the virus(50%)</p>" + "<h2> The K-infectivity is = "+str(calculateKinfectivity)+"</h2>" + y.to_html() + a.to_html() + b.to_html()
+        return base_html % df_html
+
+def df_window(x,z,e):
+    """Open dataframe in browser window using a temporary file""" 
+    with NamedTemporaryFile(delete=False, suffix='.html', mode='w+', encoding='UTF8') as f:
+        f.write(df_html(e,x,z))
+        #f.write(df_html(x))
+        #f.write(df_html(z))
+        
+        webbrowser.open(f.name)
+
+
+
+michalis = pd.DataFrame(df)
+df_window(michalis,df2,WeeklyClasses)
+
+
+
+
+
